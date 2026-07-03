@@ -63,7 +63,7 @@ No account needs to be created before the workshop starts; Lab 0 walks
 through all four.
 
 **An AI coding agent.** Claude Code is the primary supported tool for this
-material, and every lab is written with it in mind, including four
+material, and every lab is written with it in mind, including five
 supporting skills available automatically to anyone running Claude Code
 from the repo root (see [`.claude/skills/`](.claude/skills)):
 
@@ -78,11 +78,18 @@ from the repo root (see [`.claude/skills/`](.claude/skills)):
   concrete numbers
 - **backend-compare** — builds the Bonus comparison artifact from your own
   criteria plus concrete observations from earlier labs
+- **dashboard-build** — structures how the agent turns the student's chosen
+  business questions into a verified, correctly-labeled Lab 4 dashboard
 
-OpenAI Codex CLI and opencode are also supported. They don't have this
-exact skill mechanism, so each lab README spells out the equivalent as a
-set of steps to ask your agent to perform directly, reaching the same
-outcome by direct prompting instead of a slash command.
+OpenAI Codex CLI and opencode are also supported. Both now support the same
+open Agent Skills format (SKILL.md files) Claude Code uses, so this is no
+longer a Claude-Code-only mechanism — but the two look for skills in
+different places. opencode scans `.claude/skills/` directly, so it already
+picks up every skill above with no extra setup. Codex CLI scans
+`.agents/skills/` instead, a path this repo doesn't ship skills under, so on
+Codex CLI each lab README spells out the equivalent as a set of steps to ask
+your agent to perform directly, reaching the same outcome by direct
+prompting instead.
 
 No prior database experience, and no ability to read or write code, is
 assumed anywhere in this material.

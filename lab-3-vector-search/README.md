@@ -12,21 +12,29 @@ of *meaning* rather than exact value. A good query for "customers upset
 about login problems" should surface tickets, notes, and emails that never
 use those exact words.
 
-You generate those embeddings explicitly, through your agent, using Voyage
-AI — not by leaning on a black-box default embedder built into a database
-tool — so you see and control the one step that makes semantic search work
-at all.
+Voyage AI plays two different roles in this lab, one required and one
+optional, and it matters which is which. Postgres has no embedder built
+in, so pgvector — the extension you'll use to turn your Lab 1 project into
+a vector store — has no way to turn text into a vector on its own; calling
+Voyage AI directly is the only way to get a vector into it at all. Qdrant
+is different: its official MCP server embeds text with its own built-in
+model the moment you ask it to store something, so Qdrant can be built,
+loaded, and queried without Voyage ever entering the picture. Because of
+that asymmetry, this lab does Qdrant first, start to finish, using its own
+batteries-included embedding path — then does pgvector second, start to
+finish, where Voyage isn't a refinement but the only way in. An optional
+step at the end shows you how to make the two directly comparable on
+identical embeddings, for anyone who wants that stricter test.
 
-Then you run the exercise twice, on the same search question, in two
-architecturally different places: Qdrant, a database built for nothing but
-vectors, reached through its official, close-to-batteries-included MCP
-server; and pgvector, an extension that turns the very same Postgres
-project from Lab 1 into a vector store, where you control the embeddings,
-the index, and the query directly. Neither is the automatically correct
-answer. By the end of this lab you will have loaded the same vectors into
-both, run the same queries against both, and be ready to argue, from what
-you actually observed, which one you would put into production for this
-use case.
+You'll run the same search questions in two architecturally different
+places: Qdrant, a database built for nothing but vectors, reached through
+its official, close-to-batteries-included MCP server; and pgvector, an
+extension that turns the very same Postgres project from Lab 1 into a
+vector store, where you control the embeddings, the index, and the query
+directly. Neither is the automatically correct answer. By the end of this
+lab you will have fully built and queried both, one after the other, and
+be ready to argue, from what you actually observed, which one you would
+put into production for this use case.
 
 > **Method note.** Qdrant's official MCP server is close to
 > batteries-included: point it at your cluster, and a single tool call
@@ -45,14 +53,24 @@ use case.
 
 ## Duration
 
-Approximately 90 minutes:
+Approximately 90 minutes for the required Parts 1 through 3, plus roughly
+15 more minutes if you do the optional bonus:
 
-- ~10 min: connection check and picking what to embed
-- ~15 min: generating embeddings explicitly via Voyage AI, on a small pilot batch
-- ~10 min: the Qdrant ingestion-path decision, below
-- ~20 min: loading both destinations (Qdrant and pgvector) and scaling to the full corpus
-- ~15 min: pipeline verification on both sides
-- ~20 min: side-by-side semantic queries and the closing decision-point writeup
+- ~25 min: **Part 1 — Qdrant first.** Connection check, picking a pilot
+  batch, chunking and metadata, creating the collection and loading the
+  pilot letting Qdrant embed for you, verifying it landed, scaling to the
+  full 774 documents, and running the comparison queries against Qdrant
+  alone.
+- ~40 min: **Part 2 — pgvector second.** Connection and Voyage API key
+  check, picking the embedding model, generating Voyage embeddings and
+  loading the pilot into pgvector, verifying it landed, scaling to the
+  full 774 documents, and running the same comparison queries against
+  pgvector alone.
+- ~25 min: **Part 3 — compare and decide.** Summarizing what you noticed
+  operating each backend, then writing the recommendation.
+- ~15 min (optional): **Bonus — true apples-to-apples.** Rewriting the
+  Qdrant load with the same Voyage vectors used in pgvector and re-running
+  both queries.
 
 ## Prerequisites
 
@@ -83,196 +101,303 @@ Approximately 90 minutes:
 
 ## Guided steps
 
-1. **Check both connections.** Ask your agent to run the
-   `mcp-health-check` skill (or the manual equivalent) and confirm: the
-   Supabase MCP connection points at your Lab 1 project, the Qdrant MCP
-   connection points at your Qdrant Cloud cluster and has write access,
-   and a Voyage AI API key is actually available to it.
+### Part 1 — Qdrant first
 
-   > **Prompt to give your agent:**
-   > "Run the mcp-health-check skill to confirm Supabase and Qdrant are
-   > both connected — Supabase should point at my Lab 1 project, and
-   > Qdrant needs write access, not read-only. Separately, confirm you
-   > have my Voyage AI API key available for this lab."
+Qdrant goes first because, through its official MCP server, it needs
+nothing from you but a connection and some text — no Voyage, no
+dimensionality bookkeeping. Build it, load it, and query it end to end
+before pgvector enters the picture at all.
 
-2. **Pick what to embed, and start small.** Ask your agent to list the
+1. **Check the Qdrant connection, and pick a pilot batch.** Ask your
+   agent to run the `mcp-health-check` skill (or the manual equivalent)
+   and confirm the Qdrant MCP connection points at your Qdrant Cloud
+   cluster and has write access, not read-only. Then ask it to list the
    support tickets, sales notes, and emails folders with their counts
-   (774 files combined), then propose a small pilot batch — for example
+   (774 files combined), and propose a small pilot batch — for example
    15–20 tickets, 10 notes, and 8 emails — to prove the whole pipeline
    end to end before committing to embedding all 774.
 
-   > **Prompt to give your agent:**
-   > "List the files in corpus/support-tickets/, corpus/sales-notes/, and
-   > corpus/emails/ with their counts, then propose a small pilot batch —
-   > around 15-20 tickets, 10 notes, and 8 emails — so we can test the
-   > whole pipeline before embedding all 774 documents."
+   **Prompt:**
 
-3. **Settle chunking and metadata.** Ask your agent to confirm that each
+   ```
+   Run the mcp-health-check skill to confirm Qdrant is connected and has
+   write access, not read-only. Then list the files in
+   corpus/support-tickets/, corpus/sales-notes/, and corpus/emails/ with
+   their counts, and propose a small pilot batch — around 15-20 tickets,
+   10 notes, and 8 emails — so we can test the whole pipeline before
+   embedding all 774 documents.
+   ```
+
+2. **Settle chunking and metadata.** Ask your agent to confirm that each
    file is short enough to embed whole, as a single chunk, without
    splitting (flag anything unusually long), and to propose the small set
    of metadata fields to carry alongside every vector: source type,
    source ID, `customer_id`, and one or two useful fields per type
    (priority and status for tickets, account executive for notes, subject
-   line for emails).
+   line for emails). These same fields become the columns you store
+   alongside each vector in pgvector in Part 2, so it's worth settling
+   them once, now.
 
-   > **Prompt to give your agent:**
-   > "Check whether each file in the pilot batch is short enough to embed
-   > as a single chunk without splitting it, and flag anything unusually
-   > long. Then propose the metadata fields to store alongside every
-   > vector: source type, source ID, customer_id, and one or two extra
-   > fields per type — priority and status for tickets, account executive
-   > for notes, subject line for emails."
+   **Prompt:**
 
-4. **Pick and record the embedding model.** Ask your agent to check
+   ```
+   Check whether each file in the pilot batch is short enough to embed
+   as a single chunk without splitting it, and flag anything unusually
+   long. Then propose the metadata fields to store alongside every
+   vector: source type, source ID, customer_id, and one or two extra
+   fields per type — priority and status for tickets, account executive
+   for notes, subject line for emails.
+   ```
+
+3. **Create the Qdrant collection and load the pilot batch**, letting
+   Qdrant's own built-in embedder turn the raw text into vectors — this
+   is the simple, batteries-included default, and there's no need to
+   generate embeddings yourself or decide on a dimensionality up front;
+   the official Qdrant MCP server's store tool creates the collection for
+   you and sizes it to its own model automatically.
+
+   **Prompt:**
+
+   ```
+   Create a Qdrant collection for the pilot batch and load the pilot
+   documents and their metadata into it, letting Qdrant's own built-in
+   embedder handle the text directly. Don't generate embeddings for this
+   batch yourself.
+   ```
+
+4. **Verify the pilot landed correctly in Qdrant.** In Claude Code this
+   is what the `pipeline-verify` skill is for; on other tools, ask
+   directly for the same comparison — counts against the pilot batch,
+   a field-by-field spot check on a handful of records, and a clear pass
+   or fail with concrete numbers.
+
+   **Prompt (Claude Code):**
+
+   ```
+   Run the pipeline-verify skill to check what actually landed in
+   Qdrant, for the pilot batch, against the source files.
+   ```
+
+   **Prompt (Codex CLI / opencode):**
+
+   ```
+   Compare the number of pilot documents I loaded against the point
+   count in Qdrant, spot-check a handful of records field by field
+   against the original files, and report pass or fail with concrete
+   numbers.
+   ```
+
+5. **Once the pilot checks out, scale up to the full 774 documents in
+   Qdrant.**
+
+   **Prompt:**
+
+   ```
+   Now that the pilot load checks out, scale up to the full 774
+   documents in Qdrant.
+   ```
+
+6. **Run the comparison queries against Qdrant.** Ask your agent to run
+   a semantic query — something like "customers frustrated about single
+   sign-on breaking their login" — and present the top results with a
+   short snippet and a similarity score. Then ask it to run a second,
+   cross-genre query that deliberately spans support tickets and sales
+   notes (the corpus reuses SSO-frustration vocabulary across both), and
+   check whether Qdrant surfaces more than one document type, not just
+   the most literal match. Hold onto both sets of results — you'll
+   compare them against pgvector's in Part 2.
+
+   **Prompt:**
+
+   ```
+   Run the query 'customers frustrated about single sign-on breaking
+   their login' against Qdrant, and show me the top results with a
+   short snippet and similarity score for each. Then run a second query
+   that could reasonably match both a support ticket and a sales note,
+   and check whether Qdrant surfaces more than one document type, not
+   just the most literal match. Keep a note of both queries' exact
+   wording and results — we'll run the same two against pgvector next.
+   ```
+
+### Part 2 — pgvector second
+
+pgvector needs more from you: Postgres has no embedder of its own, so
+every vector that goes in has to come from somewhere — Voyage AI, in this
+lab. Build it, load it, and query it end to end the same way you just did
+for Qdrant.
+
+7. **Check the Supabase connection, and confirm your Voyage AI API key.**
+   Ask your agent to run the `mcp-health-check` skill (or the manual
+   equivalent) and confirm the Supabase MCP connection points at your
+   Lab 1 project. Separately, confirm a Voyage AI API key is actually
+   available to it — you'll need it for everything in this Part.
+
+   **Prompt:**
+
+   ```
+   Run the mcp-health-check skill to confirm Supabase is connected and
+   points at my Lab 1 project. Separately, confirm you have my Voyage AI
+   API key available for this lab.
+   ```
+
+8. **Pick and record the embedding model.** Ask your agent to check
    Voyage's current documentation for the recommended general-purpose
    text embedding model, and to report back the exact model name and the
    vector dimensionality it produces. Write that number down — you'll
-   need it to set up both destinations correctly.
+   need it to size the pgvector table correctly.
 
-   > **Prompt to give your agent:**
-   > "Check Voyage AI's current documentation for the recommended
-   > general-purpose text embedding model, and tell me the exact model
-   > name and the vector dimensionality it produces."
+   **Prompt:**
 
-5. **Generate embeddings for the pilot batch.** Ask your agent to call
+   ```
+   Check Voyage AI's current documentation for the recommended
+   general-purpose text embedding model, and tell me the exact model
+   name and the vector dimensionality it produces.
+   ```
+
+9. **Generate embeddings for the pilot batch.** Ask your agent to call
    the Voyage embeddings API directly on the pilot documents — not
    through any database's built-in embedder — batching many documents
    into each API call rather than sending one call per document. Ask it
    to confirm the number of documents embedded and the resulting vector
    dimensionality match what you expect.
 
-   > **Prompt to give your agent:**
-   > "Write and run a short script that calls the Voyage embeddings API
-   > directly on the pilot batch documents — not through any database's
-   > built-in embedder — batching many documents into each API call
-   > rather than one call per document. Confirm how many documents got
-   > embedded and that the vector dimensionality matches what we
-   > expect."
+   **Prompt:**
 
-6. **Stop here and work through Part A of the decision point below**
-   before your agent writes a single vector into Qdrant.
+   ```
+   Write and run a short script that calls the Voyage embeddings API
+   directly on the pilot batch documents — not through any database's
+   built-in embedder — batching many documents into each API call
+   rather than one call per document. Confirm how many documents got
+   embedded and that the vector dimensionality matches what we
+   expect.
+   ```
 
-7. **Ask your agent to create the Qdrant collection** — sized to the
-   dimensionality from step 4, with cosine distance — and load the pilot
-   vectors and metadata into it, using the ingestion path you chose in
-   Part A.
+10. **Enable pgvector, create the table, and load the pilot batch.** Ask
+    your agent to enable the pgvector extension on the Lab 1 Supabase
+    project (if it isn't already), create a new table for these
+    embeddings sized to the Voyage dimensionality from step 8, load the
+    pilot vectors and metadata into it, and then add an appropriate
+    index. Ask it to explain briefly why it picked the index type it
+    did — and if it picks an index type that trains on existing data
+    (IVFFlat), confirm it's building that index after the rows are
+    loaded, not on an empty table.
 
-   > **Prompt to give your agent** (say which option from Part A you
-   > picked first):
-   > "Using [Option 1 / Option 2 — the one I picked in Part A], create a
-   > Qdrant collection sized for our embedding dimensionality with cosine
-   > distance, and load the pilot vectors and metadata into it."
+    **Prompt:**
 
-8. **Ask your agent to enable pgvector** on the Lab 1 Supabase project
-   (if it isn't already), create a new table for these embeddings sized
-   to the same dimensionality, load the pilot vectors and metadata into
-   it, and then add an appropriate index. Ask it to explain briefly why
-   it picked the index type it did — and if it picks an index type that
-   trains on existing data (IVFFlat), confirm it's building that index
-   after the rows are loaded, not on an empty table.
+    ```
+    Enable the pgvector extension on my Lab 1 Supabase project if it
+    isn't already, create a new table for these embeddings sized to the
+    same dimensionality, load the pilot vectors and metadata into it, and
+    add an appropriate index. Tell me briefly why you picked that index
+    type, and if it's one that trains on existing data, confirm you're
+    building it after the rows are loaded, not on an empty table.
+    ```
 
-   > **Prompt to give your agent:**
-   > "Enable the pgvector extension on my Lab 1 Supabase project if it
-   > isn't already, create a new table for these embeddings sized to the
-   > same dimensionality, load the pilot vectors and metadata into it, and
-   > add an appropriate index. Tell me briefly why you picked that index
-   > type, and if it's one that trains on existing data, confirm you're
-   > building it after the rows are loaded, not on an empty table."
+11. **Verify the pilot landed correctly in pgvector.** In Claude Code
+    this is what the `pipeline-verify` skill is for; on other tools, ask
+    directly for the same comparison — counts against the pilot batch, a
+    field-by-field spot check on a handful of records, and a clear pass
+    or fail with concrete numbers.
 
-9. **Once both pilot loads check out, scale up to the full 774
-   documents**, batching the Voyage calls again to stay within its rate
-   limits.
+    **Prompt (Claude Code):**
 
-   > **Prompt to give your agent:**
-   > "Now that both pilot loads check out, scale up to the full 774
-   > documents, batching the Voyage calls to stay within its rate
-   > limit."
+    ```
+    Run the pipeline-verify skill to check what actually landed in
+    pgvector, for the pilot batch, against the source files.
+    ```
 
-10. **Ask your agent to verify what actually landed**, on both sides,
-    against the source files. In Claude Code this is what the
-    `pipeline-verify` skill is for; on other tools, ask directly for the
-    same comparison — counts against the source folders, a field-by-field
-    spot check on a handful of records, and a clear pass or fail with
+    **Prompt (Codex CLI / opencode):**
+
+    ```
+    Compare the number of pilot documents I embedded against the row
+    count in the pgvector table, spot-check a handful of records field
+    by field against the original files, and report pass or fail with
     concrete numbers.
+    ```
 
-    > **Prompt to give your agent** (Claude Code):
-    > "Run the pipeline-verify skill to check what actually landed in
-    > Qdrant and pgvector against the source files."
-    >
-    > **Prompt to give your agent** (Codex CLI / opencode):
-    > "Compare the number of documents I embedded against the point count
-    > in Qdrant and the row count in the pgvector table, spot-check a
-    > handful of records field by field against the original files, and
-    > report pass or fail with concrete numbers."
+12. **Once the pilot checks out, scale up to the full 774 documents**,
+    batching the Voyage calls again to stay within its rate limits, and
+    load the resulting vectors and metadata into pgvector.
 
-11. **Run the comparison queries.** Ask your agent to run the same
-    semantic query against both backends — something like "customers
-    frustrated about single sign-on breaking their login" — and present
-    the top results from each side by side, with a short snippet and a
-    similarity score. Then ask it to run a second, cross-genre query that
-    deliberately spans support tickets and sales notes (the corpus
-    reuses SSO-frustration vocabulary across both), and check whether
-    each backend surfaces more than one document type, not just the most
-    literal match.
+    **Prompt:**
 
-    > **Prompt to give your agent:**
-    > "Run the query 'customers frustrated about single sign-on breaking
-    > their login' against both Qdrant and pgvector, and show me the top
-    > results from each side by side with a short snippet and similarity
-    > score. Then run a second query that could reasonably match both a
-    > support ticket and a sales note, and check whether each backend
-    > surfaces more than one document type, not just the most literal
-    > match."
+    ```
+    Now that the pilot load checks out, scale up to the full 774
+    documents, batching the Voyage calls to stay within its rate limit,
+    and load the resulting vectors and metadata into pgvector.
+    ```
 
-12. **Ask your agent to summarize what it noticed** operating each
+13. **Run the same comparison queries against pgvector.** Ask your agent
+    to run the identical SSO-frustration query against pgvector, and
+    present the top results with a short snippet and a similarity score.
+    Then ask it to run the exact same cross-genre query you used against
+    Qdrant in Part 1, and check whether pgvector surfaces more than one
+    document type, not just the most literal match.
+
+    **Prompt:**
+
+    ```
+    Run the query 'customers frustrated about single sign-on breaking
+    their login' against pgvector, and show me the top results with a
+    short snippet and similarity score for each. Then run the same
+    second, cross-genre query you used against Qdrant in Part 1, and
+    check whether pgvector surfaces more than one document type, not
+    just the most literal match. Note both sets of results so we can
+    compare them against what Qdrant returned.
+    ```
+
+### Part 3 — Compare and decide
+
+14. **Ask your agent to summarize what it noticed** operating each
     backend during this lab — which one required more explicit decisions
     from you, which one hid more machinery, how latency and result
-    quality compared. This is the raw material for Part B of the
-    decision point below.
+    quality compared. This is the raw material for the decision point
+    below.
 
-    > **Prompt to give your agent:**
-    > "Summarize what you noticed operating each backend in this lab —
-    > which one needed more explicit decisions from me, which one hid
-    > more of the mechanism, and how latency and result quality
-    > compared."
+    **Prompt:**
+
+    ```
+    Summarize what you noticed operating each backend in this lab —
+    which one needed more explicit decisions from me, which one hid
+    more of the mechanism, and how latency and result quality
+    compared.
+    ```
+
+### Optional bonus — true apples-to-apples
+
+Because Qdrant embedded with its own model in Part 1, and pgvector used
+Voyage in Part 2, the two backends answered the comparison queries in two
+different embedding spaces. That's a fair comparison of the two systems
+in general, but not a strict "same embeddings, different store" test. If
+you want that stricter test, this step is for you — it's genuinely
+optional, not a gate you need to pass before Qdrant can be considered
+"done."
+
+15. **(Optional) Redo the Qdrant load with the same Voyage vectors used
+    in pgvector.** Ask your agent to write the Voyage vectors you already
+    generated for the full 774 documents directly into Qdrant via its
+    API, going around the store tool's own embedding step (it does this
+    by calling Qdrant's API directly with the vector, rather than handing
+    it raw text). Then re-run both comparison queries and note whether or
+    how the results shift compared to Part 1. If you take this path, you
+    must also retrieve using that same direct path for every query —
+    never the Qdrant MCP's own query tool — or you're comparing two
+    different embedding spaces all over again.
+
+    **Prompt:**
+
+    ```
+    Redo the Qdrant load: write the Voyage vectors we already generated
+    for the full 774 documents directly into Qdrant via its API, going
+    around the store tool's own embedding step. Then re-run both
+    comparison queries — using that same direct path for retrieval, not
+    the Qdrant MCP's own query tool — and tell me whether or how the
+    results shifted compared to Part 1.
+    ```
 
 ## Explicit decision point
 
-### Part A — while building: how do your Voyage vectors actually get into Qdrant?
-
-Ask your agent, before it stores anything: if you ask it to store a
-document's text in Qdrant using the store tool, will it use the Voyage
-embedding you already generated, or compute its own? The honest answer
-for the official Qdrant MCP server is the latter — its store tool always
-embeds text itself, with its own built-in model, and there is no way to
-hand it a vector you already computed. That gives you two real options;
-decide before your agent writes a single point:
-
-- **Option 1 — let Qdrant embed for you.** Ask your agent to store each
-  document's text directly through the Qdrant MCP tool and accept the
-  vectors it produces with its own built-in embedder. This is genuinely
-  the batteries-included path and the fastest way to a working
-  collection — but it means Qdrant's vectors are not the Voyage vectors
-  sitting in pgvector. The two backends will be answering the same query
-  in two different embedding spaces, so a side-by-side comparison tells
-  you something about the two systems in general, but not a clean
-  apples-to-apples test of "same embeddings, different store."
-- **Option 2 — keep control of the embedding.** Ask your agent to write
-  the Voyage vectors you already generated directly into Qdrant, going
-  around the store tool's own embedding step (it does this by calling
-  Qdrant's API directly with the vector, rather than handing it raw
-  text). This preserves a true apples-to-apples comparison with pgvector,
-  at the cost of stepping outside the tool's simplest path. If you choose
-  this, you must also retrieve using that same direct path — not the
-  Qdrant MCP's own query tool — for every query in this lab. Mixing an
-  externally supplied vector on the way in with the tool's own built-in
-  embedder on the way out compares two different embedding spaces, and
-  will produce meaningless or outright broken results.
-
-State out loud to your agent which option you're taking, and why, before
-letting it proceed.
-
-### Part B — after you've seen both: where should Larkspur's semantic search actually live?
+### Where should Larkspur's semantic search actually live?
 
 Once both stores are loaded, verified, and queried, write down — in a
 scratch note your agent keeps for you, the same way you did in Lab 2 —
@@ -291,19 +416,25 @@ first contact.
 
 ## Verification
 
+Under the default path in this lab (Parts 1 and 2, without the optional
+bonus), expect Qdrant and pgvector to end up with different embedding
+dimensions and different underlying models — that's the correct outcome
+of Qdrant self-embedding and pgvector using Voyage, not a sign something
+went wrong.
+
 **In the Qdrant Cloud UI:**
 
 - Open your cluster, go to Collections, and open the collection you
   created. Confirm the points count matches the number of documents you
-  embedded (774, or your pilot batch's count if you haven't scaled up
+  loaded (774, or your pilot batch's count if you haven't scaled up
   yet).
-- Check the collection's configured vector size and distance metric. If
-  you chose Option 2 in Part A, this should match the Voyage
-  dimensionality you recorded earlier, with cosine distance. If you chose
-  Option 1, the collection was sized and created automatically by
-  Qdrant's own built-in embedder, using its own model's dimension — that
-  is expected, not a sign anything went wrong; the Voyage-dimension check
-  applies to the pgvector side only in that case.
+- Check the collection's configured vector size and distance metric.
+  Under the default path (Part 1), Qdrant sized and created the
+  collection automatically using its own built-in embedder's model and
+  dimension — that's expected. Only if you completed the optional bonus
+  step (writing Voyage vectors directly into Qdrant) should this instead
+  match the Voyage dimensionality you recorded in Part 2, with cosine
+  distance.
 - Open a few individual points and confirm the payload holds the
   metadata you decided on (source type, source ID, `customer_id`, and so
   on) and reads back correctly for a document you recognize.
@@ -319,7 +450,7 @@ first contact.
 **Via your agent:**
 
 - Ask it to count points in Qdrant and rows in the pgvector table and
-  compare both to the number of source files you embedded — the same
+  compare both to the number of source files you loaded — the same
   comparison the `pipeline-verify` skill runs — and report a clear pass
   or fail with numbers, not "looks about right."
 - Ask it to spot-check a handful of records by source ID against the
@@ -337,14 +468,18 @@ first contact.
   Embedding 774 documents one call at a time at that rate can take hours.
   Always ask your agent to batch many documents into each API call, and
   pilot on a small subset before committing to the full corpus.
-- **Vector-space mismatch between store and retrieve.** If you chose
-  Option 2 in the decision point (writing Voyage vectors directly into
-  Qdrant), you must also query directly, the same way, every time.
-  Falling back to the Qdrant MCP's own query tool "just for a quick
-  check" re-embeds your query text with its own built-in model and
-  compares it against vectors from a different embedding space — results
-  will look wrong, or the query will simply fail, for reasons that have
-  nothing to do with semantic search itself.
+- **Vector-space mismatch between store and retrieve.** Under this lab's
+  default path, Qdrant embeds with its own built-in model and pgvector
+  uses Voyage — the two backends live in different embedding spaces, and
+  that's expected, not a bug. It only becomes a real problem if you do
+  the optional bonus step (writing Voyage vectors directly into Qdrant)
+  and then mix retrieval paths: falling back to the Qdrant MCP's own
+  query tool "just for a quick check" re-embeds your query text with its
+  own built-in model and compares it against vectors from a different
+  embedding space than the ones you wrote — results will look wrong, or
+  the query will simply fail, for reasons that have nothing to do with
+  semantic search itself. If you do the optional bonus, query directly,
+  the same way, every time.
 - **A read-only MCP connection quietly removes the write tools.** If
   your Qdrant or Supabase MCP connection from Lab 0 was configured
   read-only, the tools needed to create a collection or table, or write
@@ -352,12 +487,16 @@ first contact.
   through. Confirm write access on both sides before starting.
 - **Dimension or distance mismatch.** The pgvector column always needs
   the exact dimensionality your Voyage model actually produces. The
-  Qdrant collection needs it too, but only if you chose Option 2 in Part
-  A — under Option 1, Qdrant sizes its own collection to its built-in
-  model's dimension, and that's the expected, correct outcome, not a
-  bug. Whichever path you're on, keep the distance metric (cosine)
-  consistent everywhere you compare results, or the comparison isn't
-  really comparing the same thing.
+  Qdrant collection, under the default path in Part 1, sizes itself
+  automatically to its own built-in model's dimension — that's the
+  expected, correct outcome, not a bug, and it's normal for the two
+  collections to end up with different dimensions and even different
+  distance metrics as a result. The dimension only needs to match
+  Voyage's if you complete the optional bonus step, where the Qdrant
+  collection must be sized for the Voyage vectors you're writing into it
+  directly. Whichever path you're on, keep the distance metric (cosine)
+  consistent between whatever you're actually comparing, or the
+  comparison isn't really comparing the same thing.
 - **Mismatched chunking between the two backends.** If one backend ends
   up with whole files as chunks and the other with paragraph-split
   chunks, the two result sets no longer describe the same units of text.
@@ -377,25 +516,31 @@ first contact.
 
 ### Using Codex CLI or opencode instead
 
-Neither Codex CLI nor opencode has Claude Code's skill mechanism, so
-there's no `mcp-health-check` or `pipeline-verify` skill to invoke by
-name. Every outcome in this lab is reachable by asking directly:
+Both Codex CLI and opencode now support the same open Agent Skills format
+(SKILL.md files) Claude Code uses. opencode scans `.claude/skills/`
+directly, so it already sees this repo's `mcp-health-check` and
+`pipeline-verify` skills: invoke them by name exactly as in the steps
+above. Codex CLI supports skills too, but scans `.agents/skills/` instead,
+a path this repo doesn't use — so on Codex CLI specifically, every outcome
+in this lab is reachable by asking directly:
 
-- Instead of `mcp-health-check`, ask your agent to check its Supabase and
-  Qdrant connections and report, in plain language, what it can currently
-  see on each (tables or collections, row or point counts, read versus
-  write access).
-- Instead of `pipeline-verify`, ask: "Compare the number of documents I
-  embedded against the point count in Qdrant and the row count in the
-  pgvector table, spot-check a handful of records field by field against
-  the original files, and report pass or fail with concrete numbers."
+- Instead of `mcp-health-check`, ask your agent to check its Qdrant
+  connection in Part 1, and its Supabase connection plus your Voyage AI
+  API key in Part 2, and report, in plain language, what it can
+  currently see on each (tables or collections, row or point counts,
+  read versus write access).
+- Instead of `pipeline-verify`, ask, once per backend: "Compare the
+  number of documents I loaded against the point count in Qdrant (or the
+  row count in the pgvector table), spot-check a handful of records
+  field by field against the original files, and report pass or fail
+  with concrete numbers."
 - Confirm both your Supabase and Qdrant MCP connections were configured
   for whichever tool you're using back in Lab 0 — Codex CLI and opencode
   each use their own configuration file format for MCP servers, and the
   connection step differs slightly between tools, but every step in this
   lab works identically once both connections are live.
-- Option 2 in the decision point (writing Voyage vectors directly into
-  Qdrant, bypassing the store tool's own embedding step) is not a
+- The optional bonus step (writing Voyage vectors directly into Qdrant,
+  bypassing the store tool's own embedding step) is not a
   Claude-Code-specific technique — it's your agent calling Qdrant's API
   directly on your behalf, which works the same way regardless of which
   agent is driving.

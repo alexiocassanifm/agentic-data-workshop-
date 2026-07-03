@@ -60,9 +60,14 @@ Approximately 75 minutes:
   connection and an empty (or previously-populated, if you are re-running
   this lab) database.
 - **[`../lab-1-relational-supabase/README.md`](../lab-1-relational-supabase/README.md)
-  completed**, or at least read. This lab constantly asks "how did this
-  compare to the relational version?" — you need Lab 1's schema and query
-  experience fresh in mind to answer that honestly rather than guessing.
+  completed**, with its Supabase project still existing and reachable. This
+  lab constantly asks "how did this compare to the relational version?" —
+  but it does not depend on your agent remembering Lab 1's conversation.
+  Your agent's Supabase MCP connection (already configured in Lab 0) is
+  scoped to this project, not to any particular conversation, so whenever a
+  comparison is needed it can and should inspect the live Supabase schema
+  directly — whether this is a continuation of the same chat or a brand-new
+  one.
 
 ## Guided steps
 
@@ -70,9 +75,12 @@ Approximately 75 minutes:
    skill and confirm it can reach your MongoDB Atlas cluster and see the
    current (likely empty) list of collections.
 
-   > **Prompt to give your agent:**
-   > "Run the mcp-health-check skill and confirm you can reach my MongoDB
-   > Atlas cluster. Tell me what collections currently exist, if any."
+   **Prompt:**
+
+   ```
+   Run the mcp-health-check skill and confirm you can reach my MongoDB
+   Atlas cluster. Tell me what collections currently exist, if any.
+   ```
 
 2. **Ask your agent to re-read the corpus with a document lens.** Point it at
    `corpus/README.md` and the raw files, and ask it explicitly not to reuse
@@ -80,11 +88,14 @@ Approximately 75 minutes:
    document-shaped model from scratch, entity by entity, for the same
    underlying data.
 
-   > **Prompt to give your agent:**
-   > "Before proposing anything, re-read corpus/README.md and the raw
-   > corpus files - not the tables we built in Supabase. Don't use the
-   > Lab 1 relational schema as your starting point; think about document
-   > boundaries from scratch."
+   **Prompt:**
+
+   ```
+   Before proposing anything, re-read corpus/README.md and the raw
+   corpus files - not the tables we built in Supabase. Don't use the
+   Lab 1 relational schema as your starting point; think about document
+   boundaries from scratch.
+   ```
 
 3. **Ask your agent to run the `schema-proposal` skill for a document
    database.** Make sure the request is explicit that the output should be
@@ -94,24 +105,37 @@ Approximately 75 minutes:
    spelled out, and open questions for you to decide — not just a straight
    translation of five or six SQL tables into five or six collections.
 
-   > **Prompt to give your agent:**
-   > "Run the schema-proposal skill for a MongoDB document model of this
-   > corpus. I want candidate collections, an explicit embed-vs-reference
-   > call for each entity with your reasoning, at least one alternative
-   > you considered and rejected, and a list of open questions for me to
-   > decide - not a one-to-one translation of the Supabase tables into
-   > collections."
+   **Prompt:**
+
+   ```
+   Run the schema-proposal skill for a MongoDB document model of this
+   corpus. I want candidate collections, an explicit embed-vs-reference
+   call for each entity with your reasoning, at least one alternative
+   you considered and rejected, and a list of open questions for me to
+   decide - not a one-to-one translation of the Supabase tables into
+   collections.
+   ```
 
 4. **Ask your agent to hold its proposal up against Lab 1's schema, table by
-   table.** For each table you created in Supabase, have it state plainly:
-   does this become an embedded field, a field inside a bigger document, or
-   does it stay its own collection? And why, in one sentence per entity.
+   table.** First, have it inspect the live Supabase project directly
+   through its MCP connection — listing tables, columns, constraints, and
+   foreign keys — rather than relying on anything it might recall from
+   earlier in the conversation. Then, for each table it finds, have it
+   state plainly: does this become an embedded field, a field inside a
+   bigger document, or does it stay its own collection? And why, in one
+   sentence per entity.
 
-   > **Prompt to give your agent:**
-   > "Go through every table from Lab 1's Supabase schema one by one. For
-   > each, tell me plainly: does this become an embedded field, a field
-   > inside a bigger document, or does it stay its own collection here -
-   > and why, in one sentence per entity."
+   **Prompt:**
+
+   ```
+   First, inspect the live Supabase project via your MCP connection - list
+   its tables, columns, constraints, and foreign keys. Don't rely on
+   anything you might recall from earlier in this conversation. Then go
+   through every table you found one by one. For each, tell me plainly:
+   does this become an embedded field, a field inside a bigger document,
+   or does it stay its own collection here - and why, in one sentence per
+   entity.
+   ```
 
 5. **Ask your agent to specifically address the usage-log files.** Each
    `usage-<customer_id>.json` is already nested (a `daily_usage` array, each
@@ -120,13 +144,16 @@ Approximately 75 minutes:
    flattening it into one document per day (or per day-per-feature) in its
    own collection — with the tradeoffs of each, not just a recommendation.
 
-   > **Prompt to give your agent:**
-   > "Look specifically at the usage-log files (usage-<customer_id>.json).
-   > Lay out, side by side, what keeping the existing nested daily_usage
-   > structure looks like inside one document per customer, versus
-   > flattening it into one document per day (or per day-per-feature) in
-   > its own collection. Give me the tradeoffs of each - not just a
-   > recommendation."
+   **Prompt:**
+
+   ```
+   Look specifically at the usage-log files (usage-<customer_id>.json).
+   Lay out, side by side, what keeping the existing nested daily_usage
+   structure looks like inside one document per customer, versus
+   flattening it into one document per day (or per day-per-feature) in
+   its own collection. Give me the tradeoffs of each - not just a
+   recommendation.
+   ```
 
 6. **Make the decision point below before moving on.**
 
@@ -139,32 +166,41 @@ Approximately 75 minutes:
    not as plain strings — this matters more here than it did in Lab 1,
    since there is no column type to force it.
 
-   > **Prompt to give your agent:**
-   > "Build the population pipeline for the document model we just
-   > decided on. Read the raw corpus files, apply the same cleanup
-   > customers.csv needs (mixed date formats, blank industry /
-   > company_size_band / signup_date values, inconsistent country casing,
-   > and the two mojibake company names), and load everything into the
-   > collections we agreed on. Store dates as proper date values, not as
-   > plain strings."
+   **Prompt:**
+
+   ```
+   Build the population pipeline for the document model we just
+   decided on. Read the raw corpus files, apply the same cleanup
+   customers.csv needs (mixed date formats, blank industry /
+   company_size_band / signup_date values, inconsistent country casing,
+   and the two mojibake company names), and load everything into the
+   collections we agreed on. Store dates as proper date values, not as
+   plain strings.
+   ```
 
 8. **Ask your agent to create the indexes the chosen model actually needs**,
    and to explain, for each one, what query it makes possible or fast that
    would otherwise require scanning a whole collection.
 
-   > **Prompt to give your agent:**
-   > "Create the indexes this model actually needs. For each one, explain
-   > what query it makes possible or fast that would otherwise require
-   > scanning a whole collection."
+   **Prompt:**
+
+   ```
+   Create the indexes this model actually needs. For each one, explain
+   what query it makes possible or fast that would otherwise require
+   scanning a whole collection.
+   ```
 
 9. **Ask your agent to run the `pipeline-verify` skill** to compare corpus
    counts and samples against what actually landed in MongoDB, and to
    spot-check a handful of documents field by field.
 
-   > **Prompt to give your agent:**
-   > "Run the pipeline-verify skill to compare the corpus counts and
-   > samples against what actually landed in MongoDB, and spot-check a
-   > handful of documents field by field."
+   **Prompt:**
+
+   ```
+   Run the pipeline-verify skill to compare the corpus counts and
+   samples against what actually landed in MongoDB, and spot-check a
+   handful of documents field by field.
+   ```
 
 10. **Ask your agent to write and run 4–5 queries that test the
     natural-vs-awkward comparison** directly: for example, "give me
@@ -174,12 +210,19 @@ Approximately 75 minutes:
     Lab 1). Ask it to note, for each, whether it was simpler or more
     convoluted to express than the equivalent in Supabase.
 
-    > **Prompt to give your agent:**
-    > "Write and run 4-5 queries that test the natural-vs-awkward
-    > comparison directly - for example, give me everything about one
-    > customer in a single read, and count open tickets grouped by
-    > industry. For each one, tell me whether it was simpler or more
-    > convoluted to express than the equivalent query in Supabase."
+    **Prompt:**
+
+    ```
+    Write and run 4-5 queries that test the natural-vs-awkward
+    comparison directly - for example, give me everything about one
+    customer in a single read, and count open tickets grouped by
+    industry. For each one, tell me whether it was simpler or more
+    convoluted to express than the equivalent query in Supabase. If
+    you're not certain what the equivalent Supabase query would look
+    like, check the live Supabase schema via your MCP connection first,
+    or reason about the equivalent query structurally from that schema -
+    don't guess based on a conversation that may not exist.
+    ```
 
 ## Explicit decision point
 
@@ -307,10 +350,14 @@ retrievable (a scratch note is fine) — the Bonus lab will ask you to cite it.
 
 ### Using Codex CLI or opencode instead
 
-Codex CLI and opencode don't have the named skill/slash-command mechanism
-Claude Code uses (`mcp-health-check`, `schema-proposal`, `pipeline-verify`),
-but every outcome in this lab is reachable by asking your agent directly to
-do the same work:
+Both Codex CLI and opencode now support the same open Agent Skills format
+(SKILL.md files) Claude Code uses. opencode scans `.claude/skills/`
+directly, so it already sees this repo's `mcp-health-check`,
+`schema-proposal`, and `pipeline-verify` skills: invoke them by name exactly
+as in the steps above. Codex CLI supports skills too, but scans
+`.agents/skills/` instead, a path this repo doesn't use — so on Codex CLI
+specifically, every outcome in this lab is reachable by asking your agent
+directly to do the same work:
 
 - Instead of the `mcp-health-check` skill, ask your agent to check its
   MongoDB connection and list existing collections and document counts in

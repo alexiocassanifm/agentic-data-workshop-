@@ -140,16 +140,45 @@ only as a reference to an environment variable set outside it.
 Whichever agent you install below, once it's running, ask it this
 before connecting anything:
 
-> **Prompt to give your agent:**
-> "Check whether Node.js 22.13 or later, and uv/uvx, are installed on
-> this machine. If either is missing, walk me through installing it
-> for my operating system, then confirm both are ready before we
-> continue."
+**Prompt:**
+
+```
+Check whether Node.js 22.13 or later, and uv/uvx, are installed on
+this machine. If either is missing, walk me through installing it
+for my operating system, then confirm both are ready before we
+continue.
+```
 
 One rule applies to every "Connect" step in every track below: reload
 or restart your agent after it adds a server, before you ask it to
 verify that server - a newly added server doesn't show up until you
 do.
+
+### A note on skills
+
+Besides the three MCP servers you're about to connect, this repo also
+ships five small "skills" under [`.claude/skills/`](../.claude/skills) -
+`mcp-health-check`, `schema-proposal`, `pipeline-verify`,
+`backend-compare`, and `dashboard-build` - that later labs ask you to
+invoke by name (for example, "Run the mcp-health-check skill"). Unlike
+the MCP servers above, skills need no setup from you: they're just files
+already checked into this repo, and your agent discovers them
+automatically the moment it starts inside this folder - there's nothing
+to add, connect, or authenticate.
+
+Discovery does differ slightly by tool, which matters for how later
+labs' prompts are worded:
+
+- **Claude Code** and **opencode** both read `.claude/skills/` directly,
+  so every skill just works once you start either tool inside this
+  repository. The one thing to do on Claude Code specifically: the first
+  time it opens this folder, accept its one-time workspace trust prompt
+  - skills, like any other project file, only activate once you do.
+- **Codex CLI** supports the same open skill format, but looks for
+  skills under `.agents/skills/` instead, a folder this repo doesn't use
+  - so on Codex CLI, whenever a later lab tells you to invoke a skill by
+  name, ask your agent directly for the same outcome instead, exactly as
+  each lab's "Using Codex CLI or opencode instead" section describes.
 
 Now jump to your track: [Claude Code](#track-claude-code) ·
 [Codex CLI](#track-codex-cli) · [OpenCode](#track-opencode)
@@ -169,12 +198,15 @@ prompted.
 
 1. **Connect Supabase.**
 
-   > **Prompt to give your agent:**
-   > "Add an MCP server named `supabase`, in local scope, using the
-   > hosted endpoint
-   > `https://mcp.supabase.com/mcp?project_ref=<YOUR PROJECT REFERENCE>`.
-   > Don't add any API key or access token - this server logs in
-   > through a browser."
+   **Prompt:**
+
+   ```
+   Add an MCP server named `supabase`, in local scope, using the
+   hosted endpoint
+   `https://mcp.supabase.com/mcp?project_ref=<YOUR PROJECT REFERENCE>`.
+   Don't add any API key or access token - this server logs in
+   through a browser.
+   ```
 
 2. **Authenticate Supabase.** Reload or restart Claude Code, then
    inside the session type `/mcp`, select `supabase`, and choose
@@ -184,49 +216,67 @@ prompted.
 
 3. **Verify Supabase.**
 
-   > **Prompt to give your agent:**
-   > "List every table in my Supabase project through the MCP
-   > connection, and tell me whether the project is empty."
+   **Prompt:**
+
+   ```
+   List every table in my Supabase project through the MCP
+   connection, and tell me whether the project is empty.
+   ```
 
 4. **Connect MongoDB.**
 
-   > **Prompt to give your agent:**
-   > "Add an MCP server named `MongoDB`, in local scope, running the
-   > command `npx` with arguments `-y mongodb-mcp-server@latest`. Set
-   > an environment variable called `MDB_MCP_CONNECTION_STRING` to
-   > this value: `<YOUR MONGODB ATLAS CONNECTION STRING>`. Make sure
-   > that value is only ever stored as this environment variable -
-   > never pass it as a command-line argument, and never write it
-   > into any file that's part of this repository."
+   **Prompt:**
+
+   ```
+   Add an MCP server named `MongoDB`, in local scope, running the
+   command `npx` with arguments `-y mongodb-mcp-server@latest`. Set
+   an environment variable called `MDB_MCP_CONNECTION_STRING` to
+   this value: `<YOUR MONGODB ATLAS CONNECTION STRING>`. Make sure
+   that value is only ever stored as this environment variable -
+   never pass it as a command-line argument, and never write it
+   into any file that's part of this repository.
+   ```
 
 5. **Verify MongoDB.**
 
-   > **Prompt to give your agent:**
-   > "List the databases and collections you can currently see in
-   > MongoDB."
+   **Prompt:**
+
+   ```
+   List the databases and collections you can currently see in
+   MongoDB.
+   ```
 
 6. **Connect Qdrant.**
 
-   > **Prompt to give your agent:**
-   > "Add an MCP server named `qdrant`, in local scope, running the
-   > command `uvx` with the argument `mcp-server-qdrant`. Set two
-   > environment variables: `QDRANT_URL` to `<YOUR QDRANT CLOUD
-   > CLUSTER URL>`, and `QDRANT_API_KEY` to `<YOUR QDRANT CLOUD API
-   > KEY>`. Don't set a collection name - we'll create the real one in
-   > Lab 3."
+   **Prompt:**
+
+   ```
+   Add an MCP server named `qdrant`, in local scope, running the
+   command `uvx` with the argument `mcp-server-qdrant`. Set two
+   environment variables: `QDRANT_URL` to `<YOUR QDRANT CLOUD
+   CLUSTER URL>`, and `QDRANT_API_KEY` to `<YOUR QDRANT CLOUD API
+   KEY>`. Don't set a collection name - we'll create the real one in
+   Lab 3.
+   ```
 
 7. **Verify Qdrant.** This server only exposes a store tool and a find
    tool - there's no "list collections" tool - so the strongest
    confirmation you can get here is that the connection is alive; the
    Qdrant Cloud dashboard is the source of truth for what it contains.
 
-   > **Prompt to give your agent:**
-   > "Confirm the qdrant MCP server is connected and ready to use."
+   **Prompt:**
+
+   ```
+   Confirm the qdrant MCP server is connected and ready to use.
+   ```
 
 8. **Run the full health check.**
 
-   > **Prompt to give your agent:**
-   > "Run the mcp-health-check skill."
+   **Prompt:**
+
+   ```
+   Run the mcp-health-check skill.
+   ```
 
 Once configured, `~/.claude.json` holds a local-scoped entry nested
 under your project's own path, shaped like this:
@@ -294,11 +344,14 @@ project-level config once you've marked this folder as trusted.
 
 1. **Connect Supabase.**
 
-   > **Prompt to give your agent:**
-   > "Add an MCP server named `supabase` for the hosted endpoint
-   > `https://mcp.supabase.com/mcp?project_ref=<YOUR PROJECT REFERENCE>`.
-   > Don't add any API key or bearer token - this server logs in
-   > through a browser."
+   **Prompt:**
+
+   ```
+   Add an MCP server named `supabase` for the hosted endpoint
+   `https://mcp.supabase.com/mcp?project_ref=<YOUR PROJECT REFERENCE>`.
+   Don't add any API key or bearer token - this server logs in
+   through a browser.
+   ```
 
 2. **Authenticate Supabase.** Codex detects that this server supports
    OAuth and normally starts the login flow automatically as part of
@@ -308,48 +361,67 @@ project-level config once you've marked this folder as trusted.
 
 3. **Verify Supabase.**
 
-   > **Prompt to give your agent:**
-   > "List every table in my Supabase project through the MCP
-   > connection, and tell me whether the project is empty."
+   **Prompt:**
+
+   ```
+   List every table in my Supabase project through the MCP
+   connection, and tell me whether the project is empty.
+   ```
 
 4. **Connect MongoDB.**
 
-   > **Prompt to give your agent:**
-   > "Add an MCP server named `MongoDB`, running the command `npx`
-   > with arguments `-y mongodb-mcp-server@latest`. Set an environment
-   > variable called `MDB_MCP_CONNECTION_STRING` to this value: `<YOUR
-   > MONGODB ATLAS CONNECTION STRING>`. Make sure that value is only
-   > ever stored as this environment variable - never pass it as a
-   > command-line argument, and never write it into any file that's
-   > part of this repository."
+   **Prompt:**
+
+   ```
+   Add an MCP server named `MongoDB`, running the command `npx`
+   with arguments `-y mongodb-mcp-server@latest`. Set an environment
+   variable called `MDB_MCP_CONNECTION_STRING` to this value: `<YOUR
+   MONGODB ATLAS CONNECTION STRING>`. Make sure that value is only
+   ever stored as this environment variable - never pass it as a
+   command-line argument, and never write it into any file that's
+   part of this repository.
+   ```
 
 5. **Verify MongoDB.**
 
-   > **Prompt to give your agent:**
-   > "List the databases and collections you can currently see in
-   > MongoDB."
+   **Prompt:**
+
+   ```
+   List the databases and collections you can currently see in
+   MongoDB.
+   ```
 
 6. **Connect Qdrant.**
 
-   > **Prompt to give your agent:**
-   > "Add an MCP server named `qdrant`, running the command `uvx` with
-   > the argument `mcp-server-qdrant`. Set two environment variables:
-   > `QDRANT_URL` to `<YOUR QDRANT CLOUD CLUSTER URL>`, and
-   > `QDRANT_API_KEY` to `<YOUR QDRANT CLOUD API KEY>`. Don't set a
-   > collection name - we'll create the real one in Lab 3."
+   **Prompt:**
+
+   ```
+   Add an MCP server named `qdrant`, running the command `uvx` with
+   the argument `mcp-server-qdrant`. Set two environment variables:
+   `QDRANT_URL` to `<YOUR QDRANT CLOUD CLUSTER URL>`, and
+   `QDRANT_API_KEY` to `<YOUR QDRANT CLOUD API KEY>`. Don't set a
+   collection name - we'll create the real one in Lab 3.
+   ```
 
 7. **Verify Qdrant.**
 
-   > **Prompt to give your agent:**
-   > "Confirm the qdrant MCP server is connected and ready to use."
+   **Prompt:**
 
-8. **Run the health check.** There's no built-in health-check skill in
-   Codex.
+   ```
+   Confirm the qdrant MCP server is connected and ready to use.
+   ```
 
-   > **Prompt to give your agent:**
-   > "Check my Supabase, MongoDB, and Qdrant connections and tell me,
-   > for each one, whether it's connected and what it currently
-   > sees."
+8. **Run the health check.** Codex CLI supports skills, but it looks for
+   them under `.agents/skills/`, a path this repo doesn't use — so it
+   won't discover the `mcp-health-check` skill here. Ask directly instead.
+
+   **Prompt:**
+
+   ```
+   Check my Supabase, MongoDB, and Qdrant connections and tell me,
+   for each one, whether it's connected and what it currently
+   sees.
+   ```
 
 Once configured, `~/.codex/config.toml` holds entries shaped like
 this:
@@ -391,12 +463,15 @@ prompted.
 
 1. **Connect Supabase.**
 
-   > **Prompt to give your agent:**
-   > "Add an MCP server named `supabase` to my global OpenCode config,
-   > as a remote server for the hosted endpoint
-   > `https://mcp.supabase.com/mcp?project_ref=<YOUR PROJECT REFERENCE>`.
-   > Don't set any headers or API key - this server logs in through a
-   > browser."
+   **Prompt:**
+
+   ```
+   Add an MCP server named `supabase` to my global OpenCode config,
+   as a remote server for the hosted endpoint
+   `https://mcp.supabase.com/mcp?project_ref=<YOUR PROJECT REFERENCE>`.
+   Don't set any headers or API key - this server logs in through a
+   browser.
+   ```
 
 2. **Authenticate Supabase.** OpenCode detects that this server needs
    authentication and normally offers to start the OAuth flow the
@@ -406,50 +481,67 @@ prompted.
 
 3. **Verify Supabase.**
 
-   > **Prompt to give your agent:**
-   > "List every table in my Supabase project through the MCP
-   > connection, and tell me whether the project is empty."
+   **Prompt:**
+
+   ```
+   List every table in my Supabase project through the MCP
+   connection, and tell me whether the project is empty.
+   ```
 
 4. **Connect MongoDB.**
 
-   > **Prompt to give your agent:**
-   > "Add an MCP server named `MongoDB` to my global OpenCode config,
-   > as a local server running the command `npx` with arguments `-y
-   > mongodb-mcp-server@latest`. Set an environment variable called
-   > `MDB_MCP_CONNECTION_STRING` to this value: `<YOUR MONGODB ATLAS
-   > CONNECTION STRING>`. Make sure that value is only ever stored as
-   > this environment variable - never pass it as a command-line
-   > argument, and never write it into any file that's part of this
-   > repository."
+   **Prompt:**
+
+   ```
+   Add an MCP server named `MongoDB` to my global OpenCode config,
+   as a local server running the command `npx` with arguments `-y
+   mongodb-mcp-server@latest`. Set an environment variable called
+   `MDB_MCP_CONNECTION_STRING` to this value: `<YOUR MONGODB ATLAS
+   CONNECTION STRING>`. Make sure that value is only ever stored as
+   this environment variable - never pass it as a command-line
+   argument, and never write it into any file that's part of this
+   repository.
+   ```
 
 5. **Verify MongoDB.**
 
-   > **Prompt to give your agent:**
-   > "List the databases and collections you can currently see in
-   > MongoDB."
+   **Prompt:**
+
+   ```
+   List the databases and collections you can currently see in
+   MongoDB.
+   ```
 
 6. **Connect Qdrant.**
 
-   > **Prompt to give your agent:**
-   > "Add an MCP server named `qdrant` to my global OpenCode config, as
-   > a local server running the command `uvx` with the argument
-   > `mcp-server-qdrant`. Set two environment variables: `QDRANT_URL`
-   > to `<YOUR QDRANT CLOUD CLUSTER URL>`, and `QDRANT_API_KEY` to
-   > `<YOUR QDRANT CLOUD API KEY>`. Don't set a collection name - we'll
-   > create the real one in Lab 3."
+   **Prompt:**
+
+   ```
+   Add an MCP server named `qdrant` to my global OpenCode config, as
+   a local server running the command `uvx` with the argument
+   `mcp-server-qdrant`. Set two environment variables: `QDRANT_URL`
+   to `<YOUR QDRANT CLOUD CLUSTER URL>`, and `QDRANT_API_KEY` to
+   `<YOUR QDRANT CLOUD API KEY>`. Don't set a collection name - we'll
+   create the real one in Lab 3.
+   ```
 
 7. **Verify Qdrant.**
 
-   > **Prompt to give your agent:**
-   > "Confirm the qdrant MCP server is connected and ready to use."
+   **Prompt:**
 
-8. **Run the health check.** There's no built-in health-check skill in
-   OpenCode.
+   ```
+   Confirm the qdrant MCP server is connected and ready to use.
+   ```
 
-   > **Prompt to give your agent:**
-   > "Check my Supabase, MongoDB, and Qdrant connections and tell me,
-   > for each one, whether it's connected and what it currently
-   > sees."
+8. **Run the health check.** OpenCode reads skills straight from
+   `.claude/skills/`, so it already sees this repo's `mcp-health-check`
+   skill — ask for it by name, the same way you would in Claude Code.
+
+   **Prompt:**
+
+   ```
+   Run the mcp-health-check skill.
+   ```
 
 Once configured, your global config at
 `~/.config/opencode/opencode.json` holds entries shaped like this:
